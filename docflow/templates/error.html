@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · DocFlow AI{% endblock %}
+{% block content %}
+<section class="card error-card">
+  <h1>{{ title }}</h1>
+  <p class="muted">{{ message }}</p>
+  <a class="btn btn-primary" href="{{ url_for('main.index') }}">Back to documents</a>
+</section>
+{% endblock %}

@@ -1,0 +1,23 @@
+From: Maria Delgado <maria.delgado@example.com>
+To: service@northwindhvac.example
+Date: September 22, 2026
+Subject: AC not cooling - need repair visit
+
+Hi Northwind team,
+
+Our central air conditioner stopped cooling on Saturday. The outdoor unit
+runs but only warm air comes from the vents. The system is a Carrier unit,
+installed around 2016, and it was last serviced in May 2025.
+
+Service address: 418 Magnolia Lane, Apt 2B, Riverside, CA 92501
+
+We are available weekday mornings. Earliest possible would be great - we
+have a newborn at home and it has been over 95 degrees.
+
+Your website says the diagnostic visit is $89. Is that credited toward the
+repair if we go ahead? We would like to keep the total under $600 if possible.
+
+You can reach me at (951) 555-0142.
+
+Thanks,
+Maria Delgado

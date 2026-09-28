@@ -1,0 +1,24 @@
+# Render Blueprint: Render reads this file and creates the web service for you.
+# Secrets marked "sync: false" are typed into the Render dashboard, never committed.
+services:
+  - type: web
+    name: docflow-ai
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # 2 workers x 4 threads; long timeout because an AI analysis can take ~30-60s.
+    startCommand: gunicorn run:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEMO_MODE
+        value: "true"
+      - key: LLM_MODEL
+        value: claude-sonnet-5
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: APP_PASSWORD
+        sync: false

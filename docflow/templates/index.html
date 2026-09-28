@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <h1>Turn incoming documents into data your team can trust.</h1>
+  <p class="lead">Upload a request, estimate, application or letter. DocFlow AI extracts the key details,
+    shows exactly where each one came from, flags what's missing, and waits for a person to approve it.</p>
+</section>
+
+<section class="grid-2">
+  <div class="card">
+    <h2 class="card-title">Upload a document</h2>
+    <form class="upload" method="post" action="{{ url_for('main.upload') }}" enctype="multipart/form-data" data-busy-form>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label class="dropzone" data-dropzone>
+        <input type="file" name="document" accept=".pdf,.txt,application/pdf,text/plain" required data-file-input>
+        <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="dz-main" data-file-label>Drop a file here or <u>browse</u></span>
+        <span class="dz-sub">PDF with selectable text or TXT · up to {{ max_upload_mb }} MB</span>
+      </label>
+      <button class="btn btn-primary btn-block" type="submit">Analyze document</button>
+    </form>
+    <p class="fineprint">Files are read in memory and not stored. Only the extracted text and the review are saved.</p>
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">How it works</h2>
+    <ol class="steps">
+      <li><strong>Validate &amp; extract.</strong> File type, size and contents are checked, then the text is pulled out.</li>
+      <li><strong>Analyze.</strong> The AI returns strict structured data: each value with a source, a confidence and a supporting excerpt.</li>
+      <li><strong>Check.</strong> Code locates every excerpt in the document. Evidence that isn't there is thrown away, and the value is relabeled or discarded.</li>
+      <li><strong>Verify.</strong> A person approves, edits or rejects each value. Nothing counts as verified before that.</li>
+    </ol>
+    <div class="legend">
+      <span class="src src-explicit">Explicit</span>
+      <span class="src src-inferred">Inferred</span>
+      <span class="src src-missing">Missing</span>
+      <span class="conf conf-high"><span class="bars"><i></i><i></i><i></i></span>High</span>
+      <span class="conf conf-medium"><span class="bars"><i></i><i></i><i></i></span>Medium</span>
+      <span class="conf conf-low"><span class="bars"><i></i><i></i><i></i></span>Low</span>
+    </div>
+  </div>
+</section>
+
+{% if demos %}
+<section class="section">
+  <div class="section-head">
+    <h2>Sample documents</h2>
+    <span class="muted">Fictional businesses and people. Safe to demo.</span>
+  </div>
+  <div class="demo-grid">
+    {% for d in demos %}
+    <form method="post" action="{{ url_for('main.demo', name=d.name) }}" data-busy-form>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="demo-card" type="submit">
+        <span class="demo-kind">{{ d.kind }}</span>
+        <span class="demo-title">{{ d.title }}</span>
+        <span class="demo-desc">{{ d.desc }}</span>
+        <span class="demo-name">{{ d.name }}</span>
+        <span class="demo-cta">Analyze →</span>
+      </button>
+    </form>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<section class="section">
+  <div class="section-head"><h2>Recent documents</h2></div>
+  {% if docs %}
+  <div class="card table-card">
+    <table class="table">
+      <thead><tr><th>Document</th><th>Type</th><th>Customer</th><th>Status</th><th>Processed</th></tr></thead>
+      <tbody>
+      {% for d in docs %}
+        <tr data-href="{{ url_for('main.document', doc_id=d.id) }}">
+          <td><a href="{{ url_for('main.document', doc_id=d.id) }}">{{ d.original_name }}</a>
+            {% if d.source == 'demo' %}<span class="tag">sample</span>{% endif %}</td>
+          <td>{{ d.doc_type or '—' }}</td>
+          <td>{{ d.customer or '—' }}</td>
+          <td><span class="status status-{{ d.review_status }}">{{ d.review_status.replace('_', ' ') }}</span></td>
+          <td class="muted nowrap">{{ d.created_at[:16].replace('T', ' ') }} UTC</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">No documents yet. Upload one{% if demos %} or try a sample{% endif %}.</div>
+  {% endif %}
+</section>
+
+<div class="busy" data-busy hidden>
+  <div class="busy-box"><div class="spinner"></div><p>Reading and analyzing the document…</p></div>
+</div>
+{% endblock %}

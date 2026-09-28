@@ -1,0 +1,5 @@
+Flask>=3.0,<4
+python-dotenv>=1.0
+pypdf>=3.17
+requests>=2.31
+gunicorn>=22.0  # production server (used on Render/Linux)

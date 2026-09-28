@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}{{ doc.original_name }} · DocFlow AI{% endblock %}
+{% block main_class %}container container-wide{% endblock %}
+
+{# ---------- provenance chips ---------- #}
+{% macro source_tag(source) -%}
+  {%- if source == 'explicit' -%}<span class="src src-explicit" title="Written in the document">Explicit</span>
+  {%- elif source == 'inferred' -%}<span class="src src-inferred" title="Not written in the document. Deduced by the AI">Inferred</span>
+  {%- else -%}<span class="src src-missing" title="Not in the document">Missing</span>{%- endif -%}
+{%- endmacro %}
+
+{% macro confidence_tag(conf, reason=None) -%}
+  {%- if conf -%}
+  <span class="conf conf-{{ conf }}" title="{{ reason or '' }}"><span class="bars" aria-hidden="true"><i></i><i></i><i></i></span>{{ conf|capitalize }}</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro human_tag(decision) -%}
+  {%- if decision in ('approved', 'edited') -%}<span class="hv hv-ok">✓ Verified{{ ' · corrected' if decision == 'edited' }}</span>
+  {%- elif decision == 'rejected' -%}<span class="hv hv-no">✕ Rejected</span>
+  {%- else -%}<span class="hv hv-pending">Awaiting review</span>{%- endif -%}
+{%- endmacro %}
+
+{% macro evidence_block(source, evidence, start, end) -%}
+  {% if evidence %}
+    <button type="button" class="ev ev-{{ source }}" data-show-evidence>
+      <span class="ev-label">{{ 'Evidence' if source == 'explicit' else 'Based on' }}</span>
+      <span class="ev-q">“{{ evidence }}”</span>
+      <span class="ev-go">Show in document ↗</span>
+    </button>
+  {% elif source == 'missing' %}
+    <p class="ev-none">Not found in the document.</p>
+  {% else %}
+    <p class="ev-none ev-none-warn">No supporting text in the document.</p>
+  {% endif %}
+{%- endmacro %}
+
+{% macro field_row(r) -%}
+  {% set decided = 'approve' if r.decision in ('approved', 'edited') else ('reject' if r.decision == 'rejected' else '') %}
+  {% set attention = r.ai_source == 'inferred' or r.ai_confidence in ('low', 'medium') or r.system_note %}
+  <div class="frow src-row-{{ r.ai_source }} conf-row-{{ r.ai_confidence or 'none' }} decision-{{ r.decision }}{{ ' needs-attention' if attention }}"
+       data-field-row data-source="{{ r.ai_source }}"
+       {% if r.evidence %}data-start="{{ r.evidence_start }}" data-end="{{ r.evidence_end }}"{% endif %}>
+    <div class="frow-head">
+      <label for="v-{{ r.field_key }}">{{ r.label }}</label>
+      <div class="tags">{{ source_tag(r.ai_source) }}{{ confidence_tag(r.ai_confidence, r.confidence_reason) }}{{ human_tag(r.decision) }}</div>
+    </div>
+    <input class="field-input" id="v-{{ r.field_key }}" name="value__{{ r.field_key }}"
+           value="{{ r.final_value or '' }}" data-ai-value="{{ r.ai_value or '' }}"
+           placeholder="{{ 'Not in the document. Type a value only if you know it' if r.ai_source == 'missing' else '' }}"
+           autocomplete="off" maxlength="1000">
+    {% if r.system_note %}<p class="sys-note"><strong>Corrected by DocFlow:</strong> {{ r.system_note }}</p>{% endif %}
+    {{ evidence_block(r.ai_source, r.evidence, r.evidence_start, r.evidence_end) }}
+    <div class="frow-foot">
+      <p class="why">{% if r.confidence_reason and (r.ai_source != 'explicit' or r.ai_confidence != 'high') %}{{ r.confidence_reason }}{% endif %}</p>
+      <div class="seg" role="radiogroup" aria-label="Decision for {{ r.label }}">
+        <label class="seg-opt seg-approve"><input type="radio" name="decision__{{ r.field_key }}" value="approve" {{ 'checked' if decided == 'approve' }}><span>✓ Approve</span></label>
+        <label class="seg-opt seg-reject"><input type="radio" name="decision__{{ r.field_key }}" value="reject" {{ 'checked' if decided == 'reject' }}><span>✕ Reject</span></label>
+      </div>
+    </div>
+    {% if r.decision == 'edited' %}<p class="edited-note">Corrected by reviewer. AI proposed: {{ r.ai_value or '(nothing)' }}</p>{% endif %}
+  </div>
+{%- endmacro %}
+
+{% block content %}
+<div class="doc-header">
+  <div>
+    <a class="back" href="{{ url_for('main.index') }}">← All documents</a>
+    <h1 class="doc-title">{{ doc.original_name }}</h1>
+    <p class="muted doc-meta">
+      {{ doc.file_type|upper }} · {{ '%.1f'|format(doc.size_bytes / 1024) }} KB
+      {% if doc.page_count %} · {{ doc.page_count }} page{{ 's' if doc.page_count != 1 }}{% endif %}
+      · {{ doc.char_count }} characters
+      · analyzed by {{ 'Claude (' ~ meta.model ~ ')' if meta.provider == 'anthropic' else 'offline rules (not AI)' }}
+      {% if meta.truncated %} · <strong>long document: only the first part was analyzed</strong>{% endif %}
+    </p>
+  </div>
+  <div class="doc-header-right">
+    <span class="status status-lg status-{{ doc.review_status }}">{{ doc.review_status.replace('_', ' ') }}</span>
+    <a class="btn btn-ghost" href="{{ url_for('main.export', doc_id=doc.id) }}" target="_blank" rel="noopener">Export JSON</a>
+  </div>
+</div>
+
+{% if meta.provider != 'anthropic' %}
+<div class="flash flash-info">No API key configured, so this was processed by the <strong>offline rule-based analyzer</strong> (pattern matching, not AI). Add <code>ANTHROPIC_API_KEY</code> to <code>.env</code> for full AI analysis.</div>
+{% endif %}
+
+<div class="split">
+  <!-- LEFT: original extracted text, with every evidence excerpt marked -->
+  <section class="pane pane-doc">
+    <div class="pane-head">
+      <h2>Original text</h2>
+      <span class="doc-legend"><mark class="m-explicit">evidence</mark> <mark class="m-inferred">basis for inference</mark></span>
+    </div>
+    <pre class="doc-text" data-doc-text>{{ doc.extracted_text }}</pre>
+  </section>
+
+  <!-- RIGHT: structured analysis + human review -->
+  <section class="pane pane-analysis">
+    <div class="card prov-card">
+      <div class="prov-top">
+        <div class="prov-counts">
+          <button type="button" class="pc pc-all is-on" data-filter="all"><b>{{ counts.all }}</b> All</button>
+          <button type="button" class="pc pc-explicit" data-filter="explicit"><b>{{ a.stats.explicit }}</b> Explicit</button>
+          <button type="button" class="pc pc-inferred" data-filter="inferred"><b>{{ a.stats.inferred }}</b> Inferred</button>
+          <button type="button" class="pc pc-missing" data-filter="missing"><b>{{ a.stats.missing }}</b> Missing</button>
+          <button type="button" class="pc pc-attention" data-filter="attention"><b>{{ counts.attention }}</b> Needs attention</button>
+        </div>
+      </div>
+      <div class="hv-progress">
+        <div class="hv-progress-label">
+          <span><strong>Human verification</strong>: {{ progress.verified }} of {{ progress.total }} values verified{% if progress.rejected %}, {{ progress.rejected }} rejected{% endif %}</span>
+          <span class="muted small">Nothing is verified until a reviewer approves it.</span>
+        </div>
+        <div class="bar" data-bar data-ok="{{ progress.verified }}" data-no="{{ progress.rejected }}" data-total="{{ progress.total }}"><span class="bar-ok"></span><span class="bar-no"></span></div>
+      </div>
+    </div>
+
+    <div class="card summary-card">
+      <div class="ai-gen">AI-generated · not evidence-checked</div>
+      <div class="summary-block">
+        <h3 class="eyebrow">Summary</h3>
+        <p>{{ a.summary or '—' }}</p>
+      </div>
+      <div class="next-step">
+        <h3 class="eyebrow">Recommended next step</h3>
+        <p>{{ a.recommended_next_step or '—' }}</p>
+      </div>
+    </div>
+
+    <form method="post" action="{{ url_for('main.review', doc_id=doc.id) }}" class="review-form" data-review-form>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+      <div class="card">
+        <div class="card-head">
+          <h2 class="card-title">Extracted information</h2>
+          <button type="button" class="btn btn-small btn-ghost" data-approve-safe title="Approves only fields that are Explicit with High confidence and no corrections">Approve all explicit · high</button>
+        </div>
+        {% for r in core_rows %}{{ field_row(r) }}{% endfor %}
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Dates &amp; amounts</h2>
+        {% for r in list_rows %}{{ field_row(r) }}{% else %}<p class="muted">No dates or amounts detected.</p>{% endfor %}
+      </div>
+
+      {% if a.important_facts %}
+      <div class="card">
+        <h2 class="card-title">Important facts</h2>
+        <ul class="facts">
+          {% for f in a.important_facts %}
+          <li class="fact src-row-{{ f.source }}{{ ' needs-attention' if f.source == 'inferred' or f.confidence in ('low', 'medium') or f.note }}" data-field-row data-source="{{ f.source }}"
+              {% if f.span %}data-start="{{ f.span[0] }}" data-end="{{ f.span[1] }}"{% endif %}>
+            <div class="fact-main">
+              <div><span class="fact-label">{{ f.label }}</span> {{ f.value }}</div>
+              {% if f.note %}<p class="sys-note"><strong>Corrected by DocFlow:</strong> {{ f.note }}</p>{% endif %}
+              {{ evidence_block(f.source, f.evidence, None, None) }}
+            </div>
+            <div class="tags tags-col">{{ source_tag(f.source) }}{{ confidence_tag(f.confidence, f.reason) }}</div>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      {% if a.discarded %}
+      <div class="card discard-card">
+        <h2 class="card-title">Discarded by DocFlow <span class="muted small">(AI proposals not supported by the document)</span></h2>
+        <ul class="discards">
+          {% for d in a.discarded %}
+          <li><span class="d-label">{{ d.label }}</span> <s>{{ d.value }}</s><p class="muted small">{{ d.reason }}</p></li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      <div class="grid-2 grid-tight">
+        <div class="card">
+          <h2 class="card-title">Missing information</h2>
+          {% if a.missing_fields %}
+            <p class="muted small">Core fields not in the document (checked by code):</p>
+            <div class="chips">{% for m in a.missing_fields %}<span class="chip chip-missing">{{ m }}</span>{% endfor %}</div>
+          {% endif %}
+          {% if a.missing_information %}
+            <p class="muted small">Other gaps (AI-generated):</p>
+            <ul class="list">{% for m in a.missing_information %}<li>{{ m }}</li>{% endfor %}</ul>
+          {% elif not a.missing_fields %}<p class="muted">Nothing obviously missing.</p>{% endif %}
+        </div>
+        <div class="card">
+          <h2 class="card-title">Action items <span class="ai-gen ai-gen-inline">AI-generated</span></h2>
+          {% if a.action_items %}
+            <ul class="list list-check">{% for item in a.action_items %}<li>{{ item }}</li>{% endfor %}</ul>
+          {% else %}<p class="muted">No action items.</p>{% endif %}
+        </div>
+      </div>
+
+      <div class="card">
+        <label class="card-title" for="note">Reviewer note</label>
+        <textarea id="note" name="note" rows="2" maxlength="2000" placeholder="Optional: context for the next person">{{ doc.reviewer_note or '' }}</textarea>
+      </div>
+
+      <div class="action-bar">
+        <span class="muted small">Only approved values are exported as verified. The AI's original proposals are kept for audit.</span>
+        <div class="action-buttons">
+          <button class="btn btn-ghost" name="action" value="save">Save progress</button>
+          <button class="btn btn-danger-ghost" name="action" value="reject">Reject document</button>
+          <button class="btn btn-primary" name="action" value="approve">Approve &amp; complete</button>
+        </div>
+      </div>
+    </form>
+  </section>
+</div>
+{% endblock %}
