@@ -13,17 +13,9 @@ Nothing is considered verified until a reviewer approves it.
 
 ---
 
-## Quick start
+[demo link](https://docflow-ai-1g6p.onrender.com/)
 
-```bash
-python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env          # then edit .env
-python run.py                 # open http://127.0.0.1:5000
-```
 
-| `.env` setting | What it does |
-|---|---|
 | `ANTHROPIC_API_KEY` | Enables real AI analysis with Claude. |
 | `LLM_MODEL` | Model name (default `claude-sonnet-5`). |
 | `DEMO_MODE=true` | Shows the sample-document gallery (fictional data). With no API key, uses a clearly labeled offline rule-based analyzer so the demo always works. |
